@@ -553,14 +553,14 @@ namespace Microsoft.Dafny {
         var ss = TrSplitExpr(stmt.Expr, etran, true, out splitHappened);
         if (!splitHappened) {
           var tok = enclosingToken == null ? GetToken(stmt.Expr) : new NestedToken(enclosingToken, GetToken(stmt.Expr));
-          var desc = new PODesc.AssertStatement(errorMessage);
+          var desc = new PODesc.AssertStatement(errorMessage, stmt.Expr);
           (proofBuilder ?? b).Add(Assert(tok, etran.TrExpr(stmt.Expr), desc, stmt.Tok,
             etran.TrAttributes(stmt.Attributes, null)));
         } else {
           foreach (var split in ss) {
             if (split.IsChecked) {
               var tok = enclosingToken == null ? split.E.tok : new NestedToken(enclosingToken, split.E.tok);
-              var desc = new PODesc.AssertStatement(errorMessage);
+              var desc = new PODesc.AssertStatement(errorMessage, split., true);
               (proofBuilder ?? b).Add(AssertNS(tok, split.E, desc, stmt.Tok,
                 etran.TrAttributes(stmt.Attributes, null))); // attributes go on every split
             }

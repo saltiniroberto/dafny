@@ -4230,7 +4230,7 @@ namespace Microsoft.Dafny {
         if (formal.IsOld) {
           Bpl.Expr wh = GetWhereClause(e.tok, etran.TrExpr(e), e.Type, etran.Old, ISALLOC, true);
           if (wh != null) {
-            var desc = new PODesc.IsAllocated("default value", "in the two-state function's previous state");
+            var desc = new PODesc.IsAllocated(new Expression[] { e }, "default value", "in the two-state function's previous state");
             builder.Add(Assert(GetToken(e), wh, desc));
           }
         }
@@ -4473,7 +4473,7 @@ namespace Microsoft.Dafny {
         var witness = Zero(decl.tok, decl.Var.Type);
         if (witness == null) {
           witnessString = "";
-          witnessCheckBuilder.Add(Assert(decl.tok, Bpl.Expr.False, new PODesc.WitnessCheck(witnessString)));
+          witnessCheckBuilder.Add(Assert(decl.tok, Bpl.Expr.False, new PODesc.WitnessCheck(witnessString, decl, decl.Witness)));
         } else {
           // before trying 0 as a witness, check that 0 can be assigned to decl.Var
           witnessString = Printer.ExprToString(witness);
@@ -10987,11 +10987,13 @@ namespace Microsoft.Dafny {
       public bool IsOnlyChecked { get { return Kind == K.Checked; } }
       public bool IsChecked { get { return Kind != K.Free; } }
       public readonly Bpl.Expr E;
-      public SplitExprInfo(K kind, Bpl.Expr e) {
+      public readonly Expression Expr;
+      public SplitExprInfo(K kind, Bpl.Expr e, Expression expression) {
         Contract.Requires(e != null && e.tok != null);
         // TODO:  Contract.Requires(kind == K.Free || e.tok.IsValid);
         Kind = kind;
         E = e;
+        Expr = expression;
       }
     }
 
@@ -11095,7 +11097,8 @@ namespace Microsoft.Dafny {
         var ss = new List<SplitExprInfo>();
         if (TrSplitExpr(bce.E, ss, position, heightLimit, inlineProtectedFunctions, apply_induction, etran)) {
           foreach (var s in ss) {
-            splits.Add(new SplitExprInfo(s.Kind, CondApplyBox(s.E.tok, s.E, bce.FromType, bce.ToType)));
+            splits.Add(new SplitExprInfo(s.Kind,
+              CondApplyBox(s.E.tok, s.E, bce.FromType, bce.ToType), null));
           }
           return true;
         }
@@ -11122,7 +11125,10 @@ namespace Microsoft.Dafny {
             etran.LayerOffset(1).TrLetExprPieces(e, out lhss, out rhss);
             foreach (var s in ss) {
               // as the source location in the following let, use that of the translated "s"
-              splits.Add(new SplitExprInfo(s.Kind, new Bpl.LetExpr(s.E.tok, lhss, rhss, null, s.E)));
+              splits.Add(new SplitExprInfo(s.Kind,
+              new Bpl.LetExpr(s.E.tok, lhss, rhss, null, s.E),
+                new LetExpr(e.tok, e.LHSs, e.RHSs, s.Expr)
+              ));
             }
             return true;
           }
@@ -11147,7 +11153,10 @@ namespace Microsoft.Dafny {
           var ss = new List<SplitExprInfo>();
           if (TrSplitExpr(e.E, ss, !position, heightLimit, inlineProtectedFunctions, apply_induction, etran)) {
             foreach (var s in ss) {
-              splits.Add(new SplitExprInfo(s.Kind, Bpl.Expr.Unary(s.E.tok, UnaryOperator.Opcode.Not, s.E)));
+              splits.Add(new SplitExprInfo(s.Kind,
+                Bpl.Expr.Unary(s.E.tok, UnaryOperator.Opcode.Not, s.E),
+                  new UnaryOpExpr(s.E.tok, Not, s.Expr)
+                ));
             }
             return true;
           }
@@ -11173,7 +11182,10 @@ namespace Microsoft.Dafny {
             TrSplitExpr(bin.E1, ss, position, heightLimit, inlineProtectedFunctions, apply_induction, etran);
             foreach (var s in ss) {
               // as the source location in the following implication, use that of the translated "s"
-              splits.Add(new SplitExprInfo(s.Kind, Bpl.Expr.Binary(s.E.tok, BinaryOperator.Opcode.Imp, lhs, s.E)));
+              splits.Add(new SplitExprInfo(s.Kind,
+              Bpl.Expr.Binary(s.E.tok, BinaryOperator.Opcode.Imp, lhs, s.E),
+                new BinaryExpr(s.E.tok, BinaryExpr.Opcode.Imp, bin.E0, s.Expr)
+              ));
             }
           } else {
             var ss = new List<SplitExprInfo>();
@@ -11181,7 +11193,10 @@ namespace Microsoft.Dafny {
             var rhs = etran.TrExpr(bin.E1);
             foreach (var s in ss) {
               // as the source location in the following implication, use that of the translated "s"
-              splits.Add(new SplitExprInfo(s.Kind, Bpl.Expr.Binary(s.E.tok, BinaryOperator.Opcode.Imp, s.E, rhs)));
+              splits.Add(new SplitExprInfo(s.Kind,
+                Bpl.Expr.Binary(s.E.tok, BinaryOperator.Opcode.Imp, s.E, rhs),
+                  new BinaryExpr(s.E.tok, BinaryExpr.Opcode.Imp, s.Expr, bin.E1)
+                ));
             }
           }
           return true;
@@ -11229,7 +11244,7 @@ namespace Microsoft.Dafny {
           foreach (var c in CoPrefixEquality(tok, codecl, e1type.TypeArgs, e2type.TypeArgs, kMinusOne, layer, A2, B2, true)) {
             eqComponents = BplAnd(eqComponents, c);
             var p = Bpl.Expr.Binary(c.tok, BinaryOperator.Opcode.Or, prefixEqK, Bpl.Expr.Imp(kHasSuccessor, c));
-            splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, p));
+            splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, p, null));
           }
           if (e.E0.Type.IsBigOrdinalType) {
             var kIsNonZeroLimit = BplAnd(
@@ -11237,9 +11252,9 @@ namespace Microsoft.Dafny {
               FunctionCall(k.tok, "ORD#IsLimit", Bpl.Type.Bool, k));
             var eq = CoEqualCall(codecl, e1type.TypeArgs, e2type.TypeArgs, null, etran.layerInterCluster.LayerN((int)FuelSetting.FuelAmount.HIGH), A, B);
             var p = Bpl.Expr.Binary(tok, BinaryOperator.Opcode.Or, prefixEqK, BplOr(BplImp(kHasSuccessor, eqComponents), Bpl.Expr.Imp(kIsNonZeroLimit, eq)));
-            splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, p));
+            splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, p, null));
           }
-          splits.Add(new SplitExprInfo(SplitExprInfo.K.Free, prefixEqK));
+          splits.Add(new SplitExprInfo(SplitExprInfo.K.Free, prefixEqK, null));
           return true;
         }
 
@@ -11253,16 +11268,23 @@ namespace Microsoft.Dafny {
         TrSplitExpr(ite.Els, ssElse, position, heightLimit, inlineProtectedFunctions, apply_induction, etran);
 
         var op = position ? BinaryOperator.Opcode.Imp : BinaryOperator.Opcode.And;
+        var opExpr = position ? BinaryExpr.Opcode.Imp : BinaryExpr.Opcode.And;
         var test = etran.TrExpr(ite.Test);
         foreach (var s in ssThen) {
           // as the source location in the following implication, use that of the translated "s"
-          splits.Add(new SplitExprInfo(s.Kind, Bpl.Expr.Binary(s.E.tok, op, test, s.E)));
+          splits.Add(new SplitExprInfo(s.Kind,
+            Bpl.Expr.Binary(s.E.tok, op, test, s.E),
+              new BinaryExpr(s.E.tok, opExpr, ite.Test, s.Expr)
+            ));
         }
 
         var negatedTest = Bpl.Expr.Not(test);
         foreach (var s in ssElse) {
           // as the source location in the following implication, use that of the translated "s"
-          splits.Add(new SplitExprInfo(s.Kind, Bpl.Expr.Binary(s.E.tok, op, negatedTest, s.E)));
+          splits.Add(new SplitExprInfo(s.Kind,
+            Bpl.Expr.Binary(s.E.tok, op, negatedTest, s.E),
+                new BinaryExpr(s.E.tok, new UnaryOpExpr(ite.Test.tok, UnaryOpExpr.Opcode.Not, ite.Test))
+            ));
         }
 
         return true;
@@ -11278,12 +11300,16 @@ namespace Microsoft.Dafny {
         // this assumption is not generated in non-split positions (because I don't know how.)
         // So, treat "S; E" like "SConclusion ==> E".
         if (position) {
-          var conclusion = etran.TrExpr(e.GetSConclusion());
+          var conclusionExpr = e.GetSConclusion();
+          var conclusion = etran.TrExpr(conclusionExpr);
           var ss = new List<SplitExprInfo>();
           TrSplitExpr(e.E, ss, position, heightLimit, inlineProtectedFunctions, apply_induction, etran);
           foreach (var s in ss) {
             // as the source location in the following implication, use that of the translated "s"
-            splits.Add(new SplitExprInfo(s.Kind, Bpl.Expr.Binary(s.E.tok, BinaryOperator.Opcode.Imp, conclusion, s.E)));
+            splits.Add(new SplitExprInfo(s.Kind,
+              Bpl.Expr.Binary(s.E.tok, BinaryOperator.Opcode.Imp, conclusion, s.E),
+                new BinaryExpr(s.E.tok, BinaryExpr.Opcode.Imp, conclusionExpr, s.Expr)
+              ));
           }
         } else {
           var ss = new List<SplitExprInfo>();
@@ -11291,7 +11317,10 @@ namespace Microsoft.Dafny {
           var rhs = etran.TrExpr(e.E);
           foreach (var s in ss) {
             // as the source location in the following implication, use that of the translated "s"
-            splits.Add(new SplitExprInfo(s.Kind, Bpl.Expr.Binary(s.E.tok, BinaryOperator.Opcode.Imp, s.E, rhs)));
+            splits.Add(new SplitExprInfo(s.Kind,
+              Bpl.Expr.Binary(s.E.tok, BinaryOperator.Opcode.Imp, s.E, rhs),
+                new BinaryExpr(s.E.tok, BinaryExpr.Opcode.Imp, s.Expr, e.E)
+              ));
           }
         }
         return true;
@@ -11385,19 +11414,27 @@ namespace Microsoft.Dafny {
           foreach (var kase in caseProduct) {
             var ante = BplAnd(BplAnd(typeAntecedent, ih), kase);
             var etranBody = etran.LayerOffset(1);
-            var bdy = etranBody.TrExpr(e.LogicalBody());
+            var logicalBodyExpr = e.LogicalBody();
+            var bdy = etranBody.TrExpr(logicalBodyExpr);
             Bpl.Expr q;
+            Expression qExpr = null;
             var trig = TrTrigger(etranBody, e.Attributes, expr.tok);
             if (position) {
               q = new Bpl.ForallExpr(kase.tok, bvars, trig, Bpl.Expr.Imp(ante, bdy));
+              /*qExpr = new ForallExpr(kase.tok, kase.tok, e.BoundVars, null,
+                null new BinaryExpr(kase.tok, BinaryExpr.Opcode.Imp, anteExpr?, logicalBodyExpr)
+              );*/
             } else {
               q = new Bpl.ExistsExpr(kase.tok, bvars, trig, Bpl.Expr.And(ante, bdy));
+              /*qExpr = new ExistsExpr(kase.tok, kase.tok, e.BoundVars, null,
+                null new BinaryExpr(kase.tok, BinaryExpr.Opcode.And, anteExpr?, logicalBodyExpr)
+              );*/
             }
-            splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, q));
+            splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, q, qExpr));
           }
 
           // Finally, assume the original quantifier (forall/exists n :: P(n))
-          splits.Add(new SplitExprInfo(SplitExprInfo.K.Free, etran.TrExpr(expr)));
+          splits.Add(new SplitExprInfo(SplitExprInfo.K.Free, etran.TrExpr(expr), expr));
           return true;
         } else {
           // Don't use induction on these quantifiers.
@@ -11411,11 +11448,11 @@ namespace Microsoft.Dafny {
           }
           if (etranBoost.Statistics_CustomLayerFunctionCount == 0) {
             // apparently, the LayerOffset(1) we did had no effect
-            splits.Add(new SplitExprInfo(SplitExprInfo.K.Both, r));
+            splits.Add(new SplitExprInfo(SplitExprInfo.K.Both, r, expr));
             return needsTokenAdjustment;
           } else {
-            splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, r));  // check the boosted expression
-            splits.Add(new SplitExprInfo(SplitExprInfo.K.Free, etran.TrExpr(expr)));  // assume the ordinary expression
+            splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, r, expr));  // check the boosted expression
+            splits.Add(new SplitExprInfo(SplitExprInfo.K.Free, etran.TrExpr(expr), expr));  // assume the ordinary expression
             return true;
           }
         }
@@ -11431,11 +11468,11 @@ namespace Microsoft.Dafny {
         }
         if (etran.Statistics_CustomLayerFunctionCount == 0) {
           // apparently, doesn't use layer
-          splits.Add(new SplitExprInfo(SplitExprInfo.K.Both, r));
+          splits.Add(new SplitExprInfo(SplitExprInfo.K.Both, r, expr));
           return needsTokenAdjustment;
         } else {
-          splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, r));  // check the ordinary expression
-          splits.Add(new SplitExprInfo(SplitExprInfo.K.Free, etranBoost.TrExpr(expr)));  // assume the boosted expression
+          splits.Add(new SplitExprInfo(SplitExprInfo.K.Checked, r, expr));  // check the ordinary expression
+          splits.Add(new SplitExprInfo(SplitExprInfo.K.Free, etranBoost.TrExpr(expr), expr));  // assume the boosted expression
           return true;
         }
       }
@@ -11454,7 +11491,7 @@ namespace Microsoft.Dafny {
         translatedExpression.tok = new ForceCheckToken(expr.tok);
         splitHappened = true;
       }
-      splits.Add(new SplitExprInfo(SplitExprInfo.K.Both, translatedExpression));
+      splits.Add(new SplitExprInfo(SplitExprInfo.K.Both, translatedExpression, expr));
       return splitHappened;
     }
 

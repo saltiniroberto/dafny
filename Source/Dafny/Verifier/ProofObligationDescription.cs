@@ -420,6 +420,7 @@ public class PreconditionSatisfied : ProofObligationDescriptionWithExplicitConst
 }
 
 public class AssertStatement : ProofObligationDescriptionWithExplicitConstraint {
+  public bool Splitted { get; set; }
   public override string SuccessDescription =>
     customErrMsg is null
       ? "assertion always holds"
@@ -432,7 +433,8 @@ public class AssertStatement : ProofObligationDescriptionWithExplicitConstraint 
 
   private readonly string customErrMsg;
 
-  public AssertStatement([CanBeNull] string customErrMsg, Expression constraint) : base(constraint) {
+  public AssertStatement([CanBeNull] string customErrMsg, Expression constraint, bool splitted = false) : base(constraint) {
+    this.Splitted = splitted;
     this.customErrMsg = customErrMsg;
   }
 }
@@ -860,15 +862,18 @@ public class WitnessCheck : ProofObligationDescription {
   private readonly string hintMsg =
     "; try giving a hint through a 'witness' or 'ghost witness' clause, or use 'witness *' to treat as a possibly empty type";
   private readonly string witnessString;
-  private readonly SubsetTypeDecl typeDecl;
+  private readonly RedirectingTypeDecl typeDecl;
   private readonly Expression witnessExpr;
 
-  public WitnessCheck(string witnessString, SubsetTypeDecl typeDecl, Expression witnessExpr) {
+  public WitnessCheck(string witnessString, RedirectingTypeDecl typeDecl, Expression witnessExpr) {
     this.witnessString = witnessString;
     this.typeDecl = typeDecl;
     this.witnessExpr = witnessExpr;
   }
   public override Expression GetAssertedExpr() {
+    if (witnessExpr == null) {
+      return null;
+    }
     return new LetExpr(witnessExpr.tok, new List<CasePattern<BoundVar>>() {
         new(witnessExpr.tok, typeDecl.Var)
       }, new List<Expression>() { witnessExpr },
@@ -1002,7 +1007,7 @@ public class ElementInDomain : ProofObligationDescription {
   public override string ShortDescription => "element in domain";
 
 
-  public InRange(Expression sequence, Expression index) {
+  public ElementInDomain(Expression sequence, Expression index) {
     this.sequence = sequence;
     this.index = index;
   }
@@ -1208,7 +1213,6 @@ public class LetSuchThanUnique : ProofObligationDescription {
     return new ForallExpr(boundVar.tok, boundVar.tok, new List<BoundVar>() { boundVar, secondBoundVar },
       new BinaryExpr(boundVar.tok, BinaryExpr.Opcode.And, condition, conditionSecondBoundVar),
       new BinaryExpr(boundVar.tok, BinaryExpr.Opcode.Eq, boundVarExpr, secondBoundVarExpr), null);
-    );
   }
 }
 
