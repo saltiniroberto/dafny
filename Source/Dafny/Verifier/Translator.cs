@@ -6764,7 +6764,8 @@ namespace Microsoft.Dafny {
         var substMap = new Dictionary<IVariable, Expression>();
         substMap.Add(rdt.Var, expr);
         var typeMap = Resolver.TypeSubstitutionMap(rdt.TypeArgs, udt.TypeArgs);
-        var constraint = etran.TrExpr(Substitute(rdt.Constraint, null, substMap, typeMap));
+        var dafnyConstraint = Substitute(rdt.Constraint, null, substMap, typeMap);
+        var constraint = etran.TrExpr(dafnyConstraint);
         builder.Add(Assert(tok, constraint, new PODesc.ConversionSatisfiesConstraints(errorMsgPrefix, kind, rdt.Name)));
       }
     }
