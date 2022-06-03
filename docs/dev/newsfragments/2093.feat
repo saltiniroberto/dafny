@@ -1,1 +1,0 @@
-The IDE will no longer wait for all methods to be verified before showing verification results.  Instead, it will show verification errors for each method as soon as they become available.

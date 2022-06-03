@@ -1,0 +1,5 @@
+[tool.towncrier]
+filename = "RELEASE_NOTES.md"
+directory = "docs/dev/newsfragments"
+start_string = "See [docs/devs/newsfragments/](docs/devs/newsfragments/)."
+S
