@@ -880,6 +880,7 @@ namespace Microsoft.Dafny {
           kind = exprTok.kind,
           leadingTrivia = "",
           line = exprTok.line,
+          next = null,
           pos = exprTok.pos,
           trailingTrivia = "",
           val = exprTok.val
