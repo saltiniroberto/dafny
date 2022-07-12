@@ -60,9 +60,9 @@ namespace Microsoft.Dafny {
 
     public string val { get; set; }
 
-    public string leadingTrivia { get; set; }
+    public string leadingTrivia { get; set; } = "";
 
-    public string trailingTrivia { get; set; }
+    public string trailingTrivia { get; set; } = "";
 
     public IToken next { get; set; } // The next token
 
