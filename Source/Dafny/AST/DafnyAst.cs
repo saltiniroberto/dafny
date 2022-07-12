@@ -4046,7 +4046,7 @@ namespace Microsoft.Dafny {
         .Where(member => member.tok.line > 0)
         .Select(member => member.tok)
         .Concat(TopLevelDecls.OfType<LiteralModuleDecl>()
-          .Select(moduleDecl => moduleDecl.ModuleDef.GetFirstTopLevelToken())
+          .Select(moduleDecl => moduleDecl.ModuleDef.FirstDeclarationToken)
           .Where(tok => tok.line > 0)
         ).FirstOrDefault(Token.NoToken);
     }
